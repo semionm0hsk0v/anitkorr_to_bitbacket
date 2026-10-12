@@ -1,0 +1,315 @@
+[default]
+API_HOST = "127.0.0.1"
+API_PORT = 8080
+API_ROOT = ""
+API_MODE = "DEV"
+MODULE_NAME = "antikorr"
+ROUTER_AI_BASE_URL = "https://routerai.ru/api/v1"
+S3_SERVICE_BASE_URL = "https://s3-service.dv.gigalegal.tech/"
+S3_SERVICE_META_PATH = "/s3/meta"
+S3_SERVICE_EXISTS_PATH = "/s3/exists"
+S3_SERVICE_UPLOAD_PATH = "/s3/upload"
+S3_SERVICE_RETRY_ON_NOT_READY_ATTEMPTS = 5
+S3_SERVICE_RETRY_ON_NOT_READY_WAIT_MULTIPLIER = 2
+S3_SERVICE_RETRY_ON_NOT_READY_WAIT_MIN_SECONDS = 2
+S3_SERVICE_RETRY_ON_NOT_READY_WAIT_MAX_SECONDS = 30
+
+LOGLEVEL = "INFO"
+LOG_RENDERER = "json"
+LOG_SPLIT_STDERR = true
+LOG_STDERR_FROM = "WARNING"
+ENABLE_FILE_LOG = false
+LOG_DIR = "logs"
+APP_LOG_NAME = "app.log"
+ERROR_LOG_NAME = "error.log"
+SEPARATE_ERROR_LOG = true
+LOG_ROTATION = "size"
+LOG_MAX_BYTES = 52428800
+LOG_BACKUP_COUNT = 5
+LOG_WHEN = "midnight"
+LOG_INTERVAL = 1
+LOG_UTC = true
+FORCE_LOGGING_CONFIG = false
+LOG_CALLSITE = false
+LOG_LLM_ONLY = true
+
+
+PROXY_URL = ""
+
+[default.app]
+max_upload_mb = 100
+
+[default.mcp]
+# На сервер для всех экспертиз процесса, включая поиск, метаданные и чтение.
+max_concurrent_calls = 10
+card_search_tools = ["consultant_card_search", "CardSearch"]
+
+[default.mcp.urls]
+consultant = "consultant/mcp"
+
+[default.agents.competence]
+
+read_timeout_s = 60
+
+max_sources = 7
+parse_input_chars = 8000
+source_attempt_s = 20
+source_attempts = 2
+max_source_paragraphs = 6000
+verdict_input_chars = 400000
+
+[default.agents.legal]
+read_timeout_s = 60
+llm_retries = 1
+max_acts = 10
+# Цель совместного смыслового отбора, а не обрезка первых N источников.
+target_acts = 5
+selection_block_chars = 1000
+search_results_per_query = 10
+relaxed_results_per_query = 5
+max_source_paragraphs = 6000
+source_attempt_s = 20
+source_attempts = 2
+
+[default.agents.internal]
+limit_reason = "Детерминированная проверка ограничена отсылками, составом приложений, наименованием, сроками и значениями одной величины; смысловые противоречия не проверялись."
+
+
+
+[default.agents.reference_currentness]
+metadata_change_retries = 1
+
+[default.agents.progress]
+parse                = "Разбор структуры проекта"
+parse_done_basis     = "**Структура проекта разобрана.** Издан во исполнение: **{basis}**"
+parse_done_no_basis  = "**Структура проекта разобрана.** Акт-основание в преамбуле не распознано; сверка с вышестоящим правом — по профильным законам сферы, **требуется ручная проверка** преамбулы"
+parse_none           = "**Документ не распознан как проект НПА.** Проверка не выполняется"
+candidates           = "Группировка норм по предмету"
+retrieve             = "Подбор вышестоящих актов в Консультант+"
+compliance           = "Сверка с вышестоящими актами"
+repeal               = "Проверка полноты отмены актов"
+competence           = "Проверка компетенции инициатора"
+report               = "Формирование заключения"
+review_competence    = "Проверка компетенции органа"
+review_internal      = "Проверка внутренней согласованности проекта"
+review_legal         = "Сверка с вышестоящим правом и проверка отмены"
+review_check_completed      = "**{label}: проверка выполнена.** Замечаний: **{n}**"
+review_check_not_applicable = "**{label}: направление неприменимо.** {reason}"
+review_check_limited        = "**⚠ {label}: проверка выполнена частично.** Замечаний: **{n}**. {reason}"
+review_check_not_checked    = "**⚠ {label}: проверка не выполнена.** {reason}"
+review_early_stop    = "**Подтверждено отсутствие у органа полномочий на принятие акта в целом.** Остальные направления не проверяются"
+review_report_empty  = "**Заключение сформировано.** Замечаний в нём нет; статус проверок — в итоговой справке"
+
+# Числовые параметры алгоритмов и инфраструктуры.
+
+[default.agents.schemas.internal.norm_frame]
+proven_role_confidence = 0.75
+unproven_role_confidence = 0.5
+
+[default.agents.competence.sources]
+statute_not_found = "Положение об органе-издателе не установлено: издатель не найден в справочнике и не назван в преамбуле."
+
+[default.agents.internal.address_space]
+item_text_lookahead = 3
+max_caption_chars = 1500
+
+[default.agents.internal.appendix_check]
+form_proximity_window = 250
+genus_anchor_gap = 3
+genus_connector_max_gap = 15
+
+[default.agents.internal.norm_params]
+qualifier_window = 40
+qualifier_noun_window = 60
+closure_denial_window = 40
+calendar_year_min = 1000
+calendar_year_max_exclusive = 3000
+
+[default.agents.internal.project_frames]
+attributive_min_length = 5
+document_subject_head_chars = 4000
+
+[default.agents.internal.references_check]
+quote_pad = 50
+not_judged_examples = 10
+
+[default.agents.internal.time_limit]
+min_shared_prefix_tokens = 2
+
+[default.agents.legal.act_refs]
+page_number_max_digits = 3
+first_numbered_page = 2
+
+[default.agents.legal.plan]
+min_name_letters = 8
+same_name_prefix_share = 0.8
+default_rejection_text = "Не разрешён кандидат L1: {label} ({reason})."
+
+[default.agents.legal.region_banks]
+min_stem = 3
+
+
+
+[default.agents.legal_base.retrieval]
+page = 60
+max_pars = 400
+max_identity_title = 2000
+max_identity_requisite = 256
+max_identity_issuer = 1024
+
+[default.agents.parse.act_basis]
+preamble_window = 2500
+preamble_tail = 1200
+
+[default.agents.parse.context_basis]
+note_head_chars = 2500
+note_basis_limit = 5
+
+[default.agents.parse.morphology]
+min_stem = 4
+
+[default.agents.utils.llm]
+escalate_factor = 1.6
+escalate_cap = 16384
+token_step = 2048
+
+[default.app.antikorr]
+upload_chunk_bytes = 1048576
+
+[default.app.intake]
+head_chars = 400
+max_intake_files = 5
+project_threshold = 3
+note_threshold = 2
+
+[default.infrastructure.knowledge.organ_statutes]
+exact_stem_max_len = 2
+
+[default.infrastructure.mcp_servers.client]
+connect_retries = 2
+
+[default.infrastructure.mcp_servers.dependencies]
+stop_timeout_s = 10.0
+stop_dying_timeout_s = 1.0
+death_grace_s = 0.1
+
+[default.observability]
+duration_buckets = [0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 420.0, 600.0, inf]
+
+[default.agents.competence.evidence]
+chunk_chars = 1000
+min_split_chars = 400
+target_blocks = 850
+max_blocks = 900
+
+[default.agents.competence.verdict]
+no_source_citation = "Ответ о компетенции не подкреплён цитатой прочитанного источника."
+not_established = "По прочитанным источникам вопрос компетенции не установлен."
+downgraded = "Вывод о нарушении ({question}) не подтверждён цитатами проекта и источника и в заключение не включён."
+incomplete_source = "Решающий источник прочитан не полностью или передан модели не целиком: {labels}."
+question_labels = { organ = "орган", form = "форма" }
+
+[default.agents.report]
+detector_label = "Детектор отмены"
+project_quote = "Проект: «{quote}»."
+recommendation = "Предложение: {recommendation}"
+early_stop = "Экспертиза завершена досрочно. {reason}; остальные направления не проверялись."
+findings_count = "Выявлено замечаний: {count}."
+no_findings = "В пределах выполненных проверок нарушений не выявлено."
+not_checked = "Проверки не выполнены; вывод об отсутствии нарушений не делается."
+incomplete = "Экспертиза проведена не в полном объёме: см. статус проверок."
+analysis_date = "Дата экспертизы: {analysis_date}."
+status_heading = "Статус проверок:"
+
+[default.agents.competence.fragments]
+withheld = "{label}: не передан модели — не поместился в объём запроса."
+no_authority_articles = "{label}: статей о полномочиях не найдено ({total} статей), текст модели не передан — не поместился в объём запроса."
+fragmented = "{label}: модели переданы только статьи о полномочиях ({selected} из {total}), не полный текст."
+
+[default.agents.competence.review]
+no_source_text = "Не получен текст ни одного источника полномочий органа."
+sources_transport_failure = "Сбой обращения к правовой базе при получении источников полномочий."
+input_over_budget = "Проект и обязательные источники превышают лимит входа проверки компетенции."
+
+[default.agents.legal.review]
+timeout_s = 65.0
+no_legal_base = "Правовая база недоступна и правовые источники не предоставлены; внешние нормы не прочитаны."
+no_compliance_source = "Не получен текст ни одного вышестоящего акта для сверки."
+
+[default.agents.legal.sources]
+code_limitation = "{label}: кодекс целиком не читается, сверка с ним не выполнялась."
+
+[default.agents.legal.verdict_review]
+unit_failed = "Сверка не выполнена ({acts}): {reason}"
+unit_limitation = "{acts}: {text}"
+
+[default.agents.review.failures]
+recursion = "Превышен лимит шагов исследования правовой базы."
+context_length = "Проект с источниками не поместился в контекстное окно модели."
+default_reason = "Технический сбой обращения к модели."
+
+[default.agents.review.settle]
+early_stop = "Подтверждено отсутствие у органа полномочий на принятие акта в целом"
+no_declared_status = "Эксперт не указал статус проверки; её завершение не подтверждено."
+
+[default.agents.internal.messages]
+generic_recommendation = "Устранить противоречие: согласовать нормы проекта между собой либо исправить ссылку."
+same_variable_rationale = "Одна регулируемая операция содержит несовместимые точные значения одной переменной."
+time_limit_rationale = "Для одной операции предельный срок этапа, исчисляемый от того же события, строго превышает предельный срок услуги в целом."
+time_limit_remedy = "Согласовать предельные сроки этапа и услуги в целом."
+
+[default.agents.repeal.messages]
+completeness_basis = "В соответствии с подпунктом 1 пункта 80 методических рекомендаций по юридико-техническому оформлению законопроектов, утвержденных Государственной Думой Российской Федерации (в ред. 2021 г.), в перечень законодательных актов, подлежащих признанию утратившими силу, включаются как сам законодательный акт, подлежащий признанию утратившим силу полностью, так и все законодательные акты, которыми в текст основного законодательного акта ранее вносились изменения."
+location = "пункт 2 проекта (признание актов утратившими силу)"
+redundant_repeal_basis = "Требование определённости перечня актов, признаваемых утратившими силу: положение, уже утратившее силу, повторному признанию утратившим силу не подлежит."
+
+[default.agents.report.docx]
+vertical_margin_cm = 2
+left_margin_cm = 3
+right_margin_cm = 1.5
+font_name = "Times New Roman"
+font_size_pt = 12
+heading = "Заключение по результатам правовой экспертизы"
+analysis_date = "Дата экспертизы: {analysis_date}"
+
+[default.agents.competence.sources.kind_labels]
+"federal_law" = "Федеральный закон"
+"rf_law" = "Закон Российской Федерации"
+"regional_law" = "Закон области"
+"code" = "Кодекс"
+"rf_government_resolution" = "Постановление Правительства Российской Федерации"
+"regional_government_resolution" = "Постановление Правительства области"
+"governor_decree" = "Указ Губернатора"
+"president_decree" = "Указ Президента Российской Федерации"
+"federal_order" = "Приказ федерального органа"
+"regional_order" = "Приказ"
+"rf_directive" = "Распоряжение Правительства Российской Федерации"
+"regional_directive" = "Распоряжение"
+"other" = "Акт"
+
+
+
+[default.agents.report.risk_labels]
+"internal" = "Внутренние противоречия"
+"compliance" = "Соответствие вышестоящим актам"
+"repeal" = "Полнота и корректность отмены"
+"competence" = "Компетенция органа"
+
+[default.agents.report.status_labels]
+"completed" = "выполнена"
+"limited" = "выполнена частично"
+"not_checked" = "не выполнена"
+"not_applicable" = "неприменима"
+
+[default.agents.review.failures.reasons]
+"timeout" = "Превышено время ожидания ответа модели."
+"truncated_output" = "Ответ модели оборван по лимиту длины."
+"quota_error" = "Исчерпан лимит расходов ключа модели."
+"transport_error" = "Сбой соединения с моделью."
+"empty_output" = "Модель вернула пустой ответ."
+"invalid_json" = "Модель вернула ответ не по схеме."
+"invalid_schema" = "Модель вернула ответ не по схеме."
+"provider_error" = "Сбой провайдера модели."
+
+[default.infrastructure.llm]
+cause_depth = 4

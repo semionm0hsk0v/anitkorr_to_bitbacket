@@ -1,0 +1,17 @@
+*
+!src/
+!src/**
+!pyproject.toml
+!uv.lock
+!README.md
+!ci_cd/
+!ci_cd/dev/
+!ci_cd/dev/antikorr.Dockerfile
+!ci_cd/run_scripts/
+!ci_cd/run_scripts/start.sh
+!sberbank/
+!sberbank/**
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*

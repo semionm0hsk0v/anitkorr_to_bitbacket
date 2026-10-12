@@ -1,0 +1,183 @@
+[default.llm]
+retries = 3
+retry_wait_s = [2.0, 4.0, 6.0]
+http_timeout_s = 270
+
+[default.llm.competence]
+model = "openai/gpt-6-luna"
+stream_usage = true
+max_tokens = 16384
+timeout = 180
+streaming = false
+max_retries = 0
+models = []
+
+[default.llm.competence.reasoning]
+effort = "none"
+exclude = false
+enabled = false
+
+[default.llm.competence.provider]
+order = ["openai"]
+allow_fallbacks = false
+
+[[default.llm.competence.plugins]]
+id = "response-healing"
+
+
+[default.llm.competence_parse]
+model = "openai/gpt-6-luna"
+stream_usage = true
+max_tokens = 4096
+timeout = 60
+streaming = false
+max_retries = 0
+models = []
+
+[default.llm.competence_parse.reasoning]
+effort = "none"
+exclude = false
+enabled = false
+
+[default.llm.competence_parse.provider]
+order = ["openai"]
+allow_fallbacks = false
+
+[[default.llm.competence_parse.plugins]]
+id = "response-healing"
+
+
+[default.llm.legal_plan]
+model = "google/gemini-3.8-flash"
+temperature = 0
+stream_usage = true
+max_tokens = 4096
+timeout = 60
+streaming = true
+max_retries = 0
+models = []
+
+[default.llm.legal_plan.reasoning]
+effort = "low"
+exclude = false
+enabled = true
+
+[default.llm.legal_plan.provider]
+order = ["google-ai-studio"]
+allow_fallbacks = false
+
+[[default.llm.legal_plan.plugins]]
+id = "response-healing"
+
+[default.llm.legal_selection]
+model = "google/gemini-3.8-flash"
+temperature = 0
+stream_usage = true
+max_tokens = 4096
+timeout = 60
+streaming = false
+max_retries = 0
+models = []
+
+[default.llm.legal_selection.reasoning]
+effort = "low"
+exclude = false
+enabled = true
+
+[default.llm.legal_selection.provider]
+order = ["google-ai-studio"]
+allow_fallbacks = false
+
+[[default.llm.legal_selection.plugins]]
+id = "response-healing"
+
+[default.llm.legal_verdict]
+model = "openai/gpt-6-luna"
+temperature = 0
+stream_usage = true
+max_tokens = 8192
+timeout = 45
+streaming = false
+max_retries = 0
+models = []
+
+[default.llm.legal_verdict.reasoning]
+effort = "low"
+exclude = false
+enabled = true
+
+[default.llm.legal_verdict.provider]
+order = ["openai"]
+allow_fallbacks = false
+
+[[default.llm.legal_verdict.plugins]]
+id = "response-healing"
+
+
+[default.llm.legal_refusal]
+model = "openai/gpt-6-luna"
+temperature = 0
+stream_usage = true
+max_tokens = 8192
+timeout = 45
+streaming = false
+max_retries = 0
+models = []
+
+[default.llm.legal_refusal.reasoning]
+effort = "low"
+exclude = false
+enabled = true
+
+[default.llm.legal_refusal.provider]
+order = ["openai"]
+allow_fallbacks = false
+
+[[default.llm.legal_refusal.plugins]]
+id = "response-healing"
+
+
+[default.llm.legal_scope]
+model = "openai/gpt-6-luna"
+temperature = 0
+stream_usage = true
+max_tokens = 8192
+timeout = 45
+streaming = false
+max_retries = 0
+models = []
+
+[default.llm.legal_scope.reasoning]
+effort = "low"
+exclude = false
+enabled = true
+
+[default.llm.legal_scope.provider]
+order = ["openai"]
+allow_fallbacks = false
+
+[[default.llm.legal_scope.plugins]]
+id = "response-healing"
+
+
+[default.llm.legal_dedup]
+model = "openai/gpt-6-luna"
+temperature = 0
+stream_usage = true
+max_tokens = 4096
+timeout = 20
+streaming = false
+max_retries = 0
+models = []
+
+[default.llm.legal_dedup.reasoning]
+effort = "low"
+exclude = false
+enabled = true
+
+[default.llm.legal_dedup.provider]
+order = ["openai"]
+allow_fallbacks = false
+
+[[default.llm.legal_dedup.plugins]]
+id = "response-healing"

@@ -1,0 +1,171 @@
+variables:
+  REPO_NAME: "${CI_PROJECT_PATH}"
+  SERVICE_NAME: antikorr
+  BUILD_IMAGE: cr.yandex/crpel251bjgcjbhtu439/infrastructure/executor:v1.23.2-debug
+  DEPLOY_IMAGE: cr.yandex/crpel251bjgcjbhtu439/infrastructure/helm:3.17.1
+  BASE_URL: dv.gigalegal.tech
+  NAMESPACE: "antikorr"
+  INSTANCE_NAME: "${CI_COMMIT_REF_SLUG}-${CI_PROJECT_NAME}"
+
+stages:
+  - quality
+  - build
+  - deploy
+  - remove
+
+precommit:
+  stage: quality
+  image: cr.yandex/crpel251bjgcjbhtu439/infrastruction/python:3.13-slim
+  allow_failure: true
+  variables:
+    PRE_COMMIT_HOME: "$CI_PROJECT_DIR/.cache/pre-commit"
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  cache:
+    key: precommit
+    paths:
+      - .cache/pre-commit
+      - .cache/pip
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+    - python -V
+    - pip install -U pip pre-commit
+  script:
+    - pre-commit run --all-files --show-diff-on-failure
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: on_success
+    - when: never
+
+quality:
+  stage: quality
+  image: cr.yandex/crpel251bjgcjbhtu439/infrastruction/python:3.13-slim
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends make git && rm -rf /var/lib/apt/lists/*
+    - pip install --no-cache-dir uv
+    - uv sync --frozen
+  script:
+    - make check
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: on_success
+    - when: never
+
+.build:
+  stage: build
+  image: $BUILD_IMAGE
+  before_script:
+    - mkdir -p /kaniko/.docker
+    - echo "${DOCKER_AUTH}" | base64 -d > /kaniko/.docker/config.json
+    - DATE_CREATED=$(date +%Y%m%d)
+    - TAG="${CI_COMMIT_SHORT_SHA}_${CI_COMMIT_REF_SLUG}_${DATE_CREATED}"
+    - echo "TAG=${TAG}" >> build-$SERVICE_NAME.env
+  script:
+    - |
+      DESTINATIONS="--destination ${L3M_YC_REGISTRY}/${REPO_NAME}:${TAG}"
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        DESTINATIONS="$DESTINATIONS --destination ${L3M_YC_REGISTRY}/${REPO_NAME}:latest"
+      fi
+    - time /kaniko/executor
+      --context "${CI_PROJECT_DIR}"
+      --dockerfile "./ci_cd/dev/${SERVICE_NAME}.Dockerfile"
+      $DESTINATIONS
+      --cache=true
+      --cache-repo="${L3M_YC_REGISTRY}/${REPO_NAME}/cache"
+      --cache-ttl=72h
+  artifacts:
+    reports:
+      dotenv: build-$SERVICE_NAME.env
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+    - when: never
+
+build:
+  extends:
+    - .build
+  variables:
+    SERVICE_NAME: antikorr
+
+.deploy:
+  image:
+    name: ${DEPLOY_IMAGE}
+    entrypoint: [""]
+  stage: deploy
+  variables:
+    KUBE_CONFIG: ${L3M_YC_KUBECONFIG}
+    HELM_VALUES: "ci_cd/values.yaml"
+    INGRESS_HOST: "${INSTANCE_NAME}.${BASE_URL}"
+    INGRESS_CERT: "dv-gigalegal-tech"
+  needs:
+    - build
+  script:
+    - helm repo add ${CI_PROJECT_NAME} --username gitlab-ci-token --password $CI_JOB_TOKEN "${CI_API_V4_URL}/projects/224/packages/helm/stable"
+    - echo $NAMESPACE
+    - echo ${INSTANCE_NAME}
+    - echo ${INGRESS_HOST}
+    - echo ${TAG}
+    - helm upgrade --install --namespace "${NAMESPACE}" --create-namespace "${INSTANCE_NAME}" ${CI_PROJECT_NAME}/helm-general
+      --kubeconfig ${KUBE_CONFIG}
+      --values ${HELM_VALUES}
+      --set image.repository=${L3M_YC_REGISTRY}/${REPO_NAME}
+      --set image.tag=${TAG}
+      --set ingress.hosts[0].host=${INGRESS_HOST}
+      --set ingress.hosts[0].paths[0].path="/"
+      --set ingress.hosts[0].paths[0].pathType="Prefix"
+      --set ingress.tls[0].hosts={${INGRESS_HOST}}
+      --set ingress.tls[0].secretName=${INGRESS_CERT}
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: on_success
+      variables:
+        INSTANCE_NAME: "main-antikorr"
+        INGRESS_HOST: "antikorr.dv.gigalegal.tech"
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: on_success
+    - when: never
+
+agent:install:
+  variables:
+    SERVICE_NAME: antikorr
+  extends:
+    - .deploy
+
+agent:install:beta:
+  extends:
+    - .deploy
+  variables:
+    INSTANCE_NAME: "rc-antikorr"
+    INGRESS_HOST: "antikorr.gigalegal.ru"
+    INGRESS_CERT: "gigalegal-ru"
+    HELM_VALUES: "ci_cd/values-beta.yaml"
+    KUBE_CONFIG: ${PROD_YC_KUBECONFIG}
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual
+    - when: never
+  needs:
+    - build
+    - agent:install
+
+.remove:
+  stage: remove
+  image:
+    name: ${DEPLOY_IMAGE}
+    entrypoint: [""]
+  script:
+    - helm uninstall --namespace "${NAMESPACE}" ${INSTANCE_NAME}
+      --kubeconfig ${L3M_YC_KUBECONFIG}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+    - when: never
+
+agent:uninstall:
+  extends:
+    - .remove
+  needs:
+    - agent:install
