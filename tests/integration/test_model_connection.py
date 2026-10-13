@@ -72,9 +72,9 @@ async def test_search_and_selection_use_independent_roles_and_accounting(chat_pr
     assert selection_body["stream"] is False
     assert planning_body["temperature"] == 0
     assert selection_body["temperature"] == 0
-    assert planning_body["provider"] == {"order": ["google-ai-studio"], "allow_fallbacks": False}
+    assert planning_body["provider"] == {"order": ["google-ai-studio/flex"], "allow_fallbacks": False}
     assert planning_body["reasoning"]["effort"] == "low"
-    assert selection_body["provider"] == {"order": ["google-ai-studio"], "allow_fallbacks": False}
+    assert selection_body["provider"] == {"order": ["google-ai-studio/flex"], "allow_fallbacks": False}
     assert selection_body["reasoning"]["effort"] == "low"
     assert first.headers[HEADER_OPERATION] == "legal_discovery"
     assert second.headers[HEADER_OPERATION] == "legal_selection"

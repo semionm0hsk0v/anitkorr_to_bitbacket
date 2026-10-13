@@ -167,6 +167,7 @@ def _audit_env_overrides(
 _LLM_ROLES = frozenset(
     {
         "competence",
+        "competence_confirm",
         "competence_parse",
         "legal_plan",
         "legal_selection",

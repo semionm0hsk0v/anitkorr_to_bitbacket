@@ -10,8 +10,11 @@ import pytest
 from docx import Document
 from tenacity import stop_after_attempt, wait_none
 
-from src.agents.schemas.common.review import Review
+from src.agents.enums.common.review import RiskKind
+from src.agents.schemas.common.review import Citation, Review, Risk
+from src.agents.schemas.competence.sources import CompetenceRefs
 from src.agents.utils.streaming import (
+    FRAGMENT_BUILD_REPORT,
     FRAGMENT_PREPARE_DOCUMENT,
     FRAGMENT_REVIEW_SUMMARY,
 )
@@ -42,6 +45,7 @@ async def wire(monkeypatch):
         "runs": 0,
         "state": None,
         "documents": [],
+        "findings": [],
     }
 
     async def handler(request):
@@ -91,7 +95,23 @@ async def wire(monkeypatch):
         yield MessageFragment(
             fragment_id=FRAGMENT_PREPARE_DOCUMENT, fragment_type="think", status="in_progress", content="Проверяю проект"
         )
-        yield {"review": Review(findings=[], checks=[]), "summary": SUMMARY}
+        if scenario["findings"]:
+            yield MessageFragment(
+                fragment_id=FRAGMENT_BUILD_REPORT,
+                fragment_type="think",
+                status="success",
+                findings_shown=len(scenario["findings"]),
+                content="Текст замечания, предназначенный только для документа",
+            )
+        yield {
+            "review": Review(findings=scenario["findings"], checks=[]),
+            "summary": SUMMARY,
+            "competence_refs": CompetenceRefs(
+                issuer="Министерство социального развития Ульяновской области",
+                form="приказ",
+                project_title="Об утверждении Порядка",
+            ),
+        }
         yield MessageFragment(fragment_id=FRAGMENT_REVIEW_SUMMARY, fragment_type="response", status="success", content=SUMMARY)
 
     monkeypatch.setattr(pipeline, "mcp_is_enabled", lambda: False)
@@ -128,13 +148,37 @@ async def test_report_is_uploaded_once_and_attached_to_final_answer(call_review_
     """Заключение загружается один раз и прикрепляется к итоговому ответу."""
     payload, packets = await invoke(call_review_tool)
     response = terminal(payload, packets)
-    assert payload["finish_reason"] == "success" and payload["answer"] == SUMMARY
+    assert payload["finish_reason"] == "success" and payload["answer"] == ""
     assert response["file_id"] == REPORT
     assert wire["runs"] == 1 and len(wire["documents"]) == 1
     paragraphs = [p.text for p in Document(BytesIO(wire["documents"][0])).paragraphs]
     assert paragraphs[-1] == SUMMARY
-    assert "Проект.docx" in paragraphs
+    assert "Документ: Проект.docx" in paragraphs
+    assert "УТВЕРЖДАЮ" in paragraphs and "ЗАКЛЮЧЕНИЕ" in paragraphs
+    assert "на проект приказа" in paragraphs
+    assert "«Об утверждении Порядка»" in paragraphs
     assert all(p.get("fragment_type") != "response" for p in packets[:-1])
+
+
+async def test_findings_are_delivered_in_file_without_text_in_chat(call_review_tool, wire):
+    risk = Risk(
+        kind=RiskKind.INTERNAL,
+        explanation="Нарушение установленного срока.",
+        recommendation="Изменить срок.",
+        citations=[Citation(source="project", location="пункт 2", quote="Установить срок 10 дней.")],
+    )
+    wire["findings"] = [risk]
+    payload, packets = await invoke(call_review_tool)
+    response = terminal(payload, packets)
+    assert payload["finish_reason"] == "success"
+    assert response["content"] == payload["answer"] == ""
+    assert response["file_id"] == REPORT
+    assert wire["runs"] == 1 and len(wire["documents"]) == 1
+    text = "\n".join(p.text for p in Document(BytesIO(wire["documents"][0])).paragraphs)
+    for expected in (risk.explanation, risk.recommendation, risk.citations[0].quote, SUMMARY):
+        assert expected in text
+        assert expected not in json.dumps([payload, packets], ensure_ascii=False)
+    assert "Текст замечания" not in json.dumps(packets, ensure_ascii=False)
 
 
 @pytest.mark.parametrize(
@@ -187,13 +231,13 @@ async def test_invalid_document_is_rejected_before_review(call_review_tool, wire
 
 
 @pytest.mark.parametrize("changes", [{"upload": 503}, {"upload_status": "pending"}, {"report_id": "bad-id"}])
-async def test_failed_report_upload_preserves_text_answer(call_review_tool, wire, changes):
-    """При сбое выдачи файла текст заключения остаётся доступным."""
+async def test_failed_report_upload_returns_error_without_report_text(call_review_tool, wire, changes):
+    """Сбой выдачи файла не считается успешной доставкой заключения."""
     wire.update(changes)
     payload, packets = await invoke(call_review_tool)
-    assert payload["finish_reason"] == "success"
-    assert payload["answer"].startswith(SUMMARY)
-    assert "доставить DOCX не удалось" in payload["answer"]
+    assert payload["finish_reason"] == "error"
+    assert SUMMARY not in payload["answer"]
+    assert "файл заключения" in payload["answer"]
     assert terminal(payload, packets)["file_id"] is None
     assert wire["runs"] == 1
 

@@ -13,7 +13,12 @@ from src.agents.steps_tools.authority.requisites import (
     refs_from_model,
 )
 from src.agents.steps_tools.authority.sources import authority_refs, collect_competence_sources, source_priority
-from src.agents.steps_tools.authority.verdict import competence_verdict, unchecked_competence_review
+from src.agents.steps_tools.authority.verdict import (
+    competence_verdict,
+    stops_early,
+    unchecked_competence_review,
+    unconfirmed_early_stop,
+)
 from src.agents.steps_tools.review.failures import failure_reason
 from src.agents.steps_tools.sources.source_reading import legal_sources_from_readings
 from src.agents.steps_tools.sources.transport_barrier import is_external_transport_failure
@@ -24,7 +29,7 @@ from src.common.utils.logger import get_logger
 log = get_logger(__name__)
 
 
-async def check_authority_node(state: PipelineState) -> dict:
+async def check_authority_node(state: PipelineState) -> dict:  # noqa: PLR0915 - explicit calls and failure boundaries
     """Проверить полномочия по прочитанным нормам и сохранить материалы для следующих шагов."""
     emit_ui_event(state, "check_authority", FRAGMENT_CHECK_AUTHORITY, status="in_progress", content="Проверка компетенции органа")
 
@@ -112,6 +117,24 @@ async def check_authority_node(state: PipelineState) -> dict:
         review = competence_verdict(
             assessment, blocks=blocks, document=document_text, views=source_views, limitations=limitations
         )
+        if stops_early(review):
+            # A false whole-act rejection would suppress every later check.
+            # The second reviewer sees the same evidence, without the first conclusion.
+            operation = "competence_confirmation"
+            confirmation = (
+                await llm.generate_structured(
+                    role="competence_confirm",
+                    messages=messages,
+                    prompt=describe_prompt(template),
+                    schema=assessment_schema(blocks),
+                    operation=operation,
+                    retries=0,
+                )
+            ).value
+            confirmed = competence_verdict(
+                confirmation, blocks=blocks, document=document_text, views=source_views, limitations=limitations
+            )
+            review = confirmed if stops_early(confirmed) else unconfirmed_early_stop(confirmed)
     except Exception as exc:
         await log.awarning(f"{operation}_failed", error_class=type(exc).__name__)
         if operation == "competence_parse":
@@ -121,6 +144,10 @@ async def check_authority_node(state: PipelineState) -> dict:
                 settings["agents.competence.review.sources_transport_failure"]
                 if is_external_transport_failure(exc)
                 else "Технический сбой получения источников полномочий."
+            )
+        elif operation == "competence_confirmation":
+            reason = "Не выполнено подтверждение отсутствия полномочий на весь акт; ранняя остановка отменена. " + failure_reason(
+                exc
             )
         else:
             reason = failure_reason(exc)

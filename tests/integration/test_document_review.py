@@ -668,7 +668,10 @@ async def test_confirmed_lack_of_authority_stops_review(monkeypatch, detector, i
     """Доказанное отсутствие полномочий на весь акт останавливает экспертизу."""
     calls, _ = detector
     installed = install(monkeypatch, external=[competence(CompetenceScope.ACT, COMPETENCE)])
+    confirmation = StructuredModel([competence(CompetenceScope.ACT, COMPETENCE)])
+    monkeypatch.setitem(llm_client.llm._models, "competence_confirm", confirmation)
     final = await run()
+    assert len(confirmation.seen) == 1
 
     assert len(installed.expert.seen) == 1 and installed.legal.seen == [] and installed.plans == []
     assert internal == []  # internal detector not started
@@ -837,3 +840,13 @@ async def test_authority_cancellation_propagates(monkeypatch, role):
     monkeypatch.setitem(llm_client.llm._models, role, model)
     with pytest.raises(asyncio.CancelledError):
         await run()
+
+
+async def test_disputed_whole_act_rejection_keeps_other_checks_running(monkeypatch, detector, internal):
+    installed = install(monkeypatch, external=[competence(CompetenceScope.ACT, COMPETENCE)])
+    monkeypatch.setitem(llm_client.llm._models, "competence_confirm", StructuredModel([competence(CompetenceScope.NONE)]))
+    final = await run()
+    assert final["competence_review"].scope is CompetenceScope.UNKNOWN
+    assert checks_of(final)[RiskKind.COMPETENCE].status is CheckStatus.LIMITED
+    assert installed.legal.seen and installed.plans and internal
+    assert detector[0]

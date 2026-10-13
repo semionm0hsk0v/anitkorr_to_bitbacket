@@ -172,8 +172,7 @@ async def run_expertise_stream(
         await log.aexception("mcp_expertise_failed", thread_id=thread_id, message_id=mid)
         return await finish(status="error", answer=_FAILED_ANSWER)
 
-    answer = _assemble_answer([fragment.content or "" for fragment in found], terminal_note)
-    if report is None or not terminal_note or answer == _FALLBACK_ANSWER:
+    if report is None or not terminal_note or not report["summary"].strip():
         return await finish(status="error", answer=_FALLBACK_ANSWER)
     try:
         report_file_id = await deliver_report(
@@ -182,13 +181,14 @@ async def run_expertise_stream(
             source_name=decision.subject.name,
             analysis_date=initial_state["analysis_date"],
             thread_id=thread_id,
+            competence_refs=report.get("competence_refs"),
+            parsed_document=report.get("parsed_document"),
         )
     except Exception:
         await log.awarning("mcp_report_delivery_failed", thread_id=thread_id, message_id=mid)
         return await finish(
-            status="success",
-            answer=answer + "\n\nТекст заключения готов, но доставить DOCX не удалось. Файл недоступен. "
-            "Повторите запрос позднее для получения DOCX.",
+            status="error",
+            answer="Не удалось подготовить или доставить файл заключения. Повторите запрос позднее.",
         )
     await log.ainfo(
         "mcp_expertise_done",
@@ -196,9 +196,8 @@ async def run_expertise_stream(
         message_id=mid,
         findings_blocks=len(found),
         findings_cards=sum(fragment.findings_shown or 0 for fragment in found),
-        answer_chars=len(answer),
     )
-    return await finish(status="success", answer=answer, file_id=report_file_id)
+    return await finish(status="success", answer="", file_id=report_file_id)
 
 
 async def _collect_review(initial_state: PipelineState, emit: Callable[[MessageFragment], Awaitable[None]]):
@@ -221,17 +220,5 @@ async def _collect_review(initial_state: PipelineState, emit: Callable[[MessageF
 
 
 def _carries_findings(fragment: MessageFragment) -> bool:
-    "Блок детектора несёт карточки разбора → его место в ответе, а не в ленте прогресса."
+    "Карточки находок доступны в DOCX; в прогресс их не передаём."
     return bool(fragment.findings_shown) and bool(fragment.content)
-
-
-def _assemble_answer(found_blocks: list[str], terminal_note: str | None) -> str:
-    "Ответ пользователю: блоки находок и за ними справка (дата и статусы проверок)."
-    blocks = [block.strip() for block in found_blocks if block and block.strip()]
-    if blocks:
-        if terminal_note and terminal_note.strip():
-            blocks.append(terminal_note.strip())
-        return "\n\n".join(blocks)
-    if terminal_note and terminal_note.strip():
-        return terminal_note.strip()
-    return _FALLBACK_ANSWER

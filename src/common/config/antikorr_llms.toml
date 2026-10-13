@@ -18,10 +18,32 @@ exclude = false
 enabled = false
 
 [default.llm.competence.provider]
-order = ["openai"]
+order = ["openai/flex"]
 allow_fallbacks = false
 
 [[default.llm.competence.plugins]]
+id = "response-healing"
+
+
+[default.llm.competence_confirm]
+model = "openai/gpt-6-luna"
+stream_usage = true
+max_tokens = 16384
+timeout = 180
+streaming = false
+max_retries = 0
+models = []
+
+[default.llm.competence_confirm.reasoning]
+effort = "low"
+exclude = false
+enabled = true
+
+[default.llm.competence_confirm.provider]
+order = ["openai"]
+allow_fallbacks = false
+
+[[default.llm.competence_confirm.plugins]]
 id = "response-healing"
 
 
@@ -63,7 +85,7 @@ exclude = false
 enabled = true
 
 [default.llm.legal_plan.provider]
-order = ["google-ai-studio"]
+order = ["google-ai-studio/flex"]
 allow_fallbacks = false
 
 [[default.llm.legal_plan.plugins]]
@@ -85,7 +107,7 @@ exclude = false
 enabled = true
 
 [default.llm.legal_selection.provider]
-order = ["google-ai-studio"]
+order = ["google-ai-studio/flex"]
 allow_fallbacks = false
 
 [[default.llm.legal_selection.plugins]]

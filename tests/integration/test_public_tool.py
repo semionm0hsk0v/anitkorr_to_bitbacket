@@ -152,7 +152,7 @@ async def test_confirmed_findings_reach_user(call_review_tool, monkeypatch: pyte
 
     assert payload["finish_reason"] == "success"
     assert payload["thread_id"] == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
-    assert payload["answer"] == _CARD + "\n\nСправка"
+    assert payload["answer"] == ""
     assert calls == [[_PROJECT_ID, _NOTE_ID]]
 
     assert packets[0]["role"] == "assistant" and packets[0]["fragments"] == []  # скелет сообщения
@@ -166,11 +166,13 @@ async def test_confirmed_findings_reach_user(call_review_tool, monkeypatch: pyte
     terminal = _terminal(packets)
     assert terminal["status"] == "success"
     assert terminal["fragments"][-1]["fragment_type"] == "response"
-    assert terminal["fragments"][-1]["content"] == payload["answer"]
+    assert terminal["fragments"][-1]["content"] == ""
+    assert terminal["fragments"][-1]["file_id"] == _NOTE_ID
+    assert _CARD not in json.dumps([payload, packets], ensure_ascii=False)
 
 
-async def test_project_without_findings_gets_review_summary(call_review_tool, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Проект без находок получает итог с границами проверки."""
+async def test_project_without_findings_gets_report_file(call_review_tool, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Проект без находок также получает файл, без текста заключения в чате."""
     _patch_documents(monkeypatch)
     _patch_graph(
         monkeypatch,
@@ -186,7 +188,7 @@ async def test_project_without_findings_gets_review_summary(call_review_tool, mo
     payload, packets = await call_review_tool({"thread_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "file_ids": [_PROJECT_ID]})
 
     assert payload["finish_reason"] == "success"
-    assert payload["answer"] == _CLEAN_NOTE
+    assert payload["answer"] == ""
     assert _terminal(packets)["status"] == "success"
 
 

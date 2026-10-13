@@ -13,7 +13,7 @@ from src.agents.schemas.competence.fragments import SourceView
 from src.agents.schemas.competence.review import CompetenceReview
 from src.agents.schemas.competence.verdict import SettledAnswer
 from src.agents.steps_tools.review.grounding import quote_in_source
-from src.agents.steps_tools.review.settle import not_checked
+from src.agents.steps_tools.review.settle import not_checked, worse
 from src.common.config.config import settings
 
 
@@ -179,4 +179,23 @@ def stops_early(review: CompetenceReview | None) -> bool:
         check is not None
         and check.status is CheckStatus.COMPLETED
         and any(f.kind is RiskKind.COMPETENCE for f in review.findings)
+    )
+
+
+def unconfirmed_early_stop(review: CompetenceReview) -> CompetenceReview:
+    """Разногласие о полномочиях не закрывает остальные проверки и не означает compliant."""
+    reason = "Две сверки полномочий расходятся: отсутствие полномочий на весь акт не подтверждено; остальные проверки продолжены."
+    return review.model_copy(
+        update={
+            "scope": CompetenceScope.UNKNOWN if review.scope is CompetenceScope.NONE else review.scope,
+            "checks": [
+                check.model_copy(
+                    update={
+                        "status": worse(check.status, CheckStatus.LIMITED),
+                        "reason": " ".join(filter(None, (check.reason, reason))),
+                    }
+                )
+                for check in review.checks
+            ],
+        }
     )

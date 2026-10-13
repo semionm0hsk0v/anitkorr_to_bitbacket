@@ -7,7 +7,11 @@ from src.agents.enums.common.review import CheckStatus, RiskKind
 from src.agents.enums.competence.review import CompetenceScope
 from src.agents.schemas.common.review import Check, Citation, Review, Risk
 from src.agents.schemas.competence.review import CompetenceReview
+from src.agents.schemas.competence.sources import CompetenceRefs
+from src.agents.schemas.parse.parsed_document import ParsedDocument
 from src.agents.steps import build_report_node as report_module
+from src.agents.steps_tools.document.act_basis import extract_act_basis
+from src.agents.steps_tools.document.structure import build_document_structure_tree
 from src.agents.steps_tools.report.assemble import REPORT_ORDER, body_paragraphs
 from src.agents.steps_tools.report.render import report_docx
 from src.common.config.config import settings
@@ -29,6 +33,36 @@ def branch(kind: RiskKind, *, status: CheckStatus = CheckStatus.COMPLETED, findi
             Check(kind=kind, status=status, reason="Часть источников не прочитана." if status is CheckStatus.LIMITED else "")
         ],
     )
+
+
+def test_docx_preserves_evidence_across_page_breaks_and_invalid_xml_characters():
+    quote = "Первая страница\fВторая страница\tСрок 5 дней."
+    risk = Risk(
+        kind=RiskKind.COMPLIANCE,
+        citations=[Citation(source="project", quote=quote)],
+        explanation="Данные\x00источника\uffff",
+        recommendation="Обычный текст: <акт> & право 😀",
+    )
+    document = Document(
+        BytesIO(
+            report_docx(
+                Review(findings=[risk], checks=[]),
+                "Проверка\x0bограничена",
+                source_name="Проект\x01\ud800",
+                analysis_date="2026-10-12",
+            )
+        )
+    )
+    text = "\n".join(p.text for p in document.paragraphs)
+    for expected in (
+        "Проект\ufffd",
+        "Первая страница\nВторая страница\tСрок 5 дней.",
+        "Данные\ufffdисточника\ufffd",
+        "Обычный текст: <акт> & право 😀",
+        "Проверка\ufffdограничена",
+    ):
+        assert expected in text
+    assert risk.citations[0].quote == quote
 
 
 @pytest.fixture
@@ -62,8 +96,104 @@ async def test_report_preserves_branch_findings_statuses_and_docx_text(events):
     assert "Часть источников не прочитана." in summary
     body = body_paragraphs(review)
     assert events == [{"status": "success", "content": "\n\n".join(body), "findings_shown": 4, "outcome": "warn"}]
-    document = Document(BytesIO(report_docx(body, summary.splitlines(), source_name="Проект", analysis_date="2026-10-11")))
-    assert [p.text for p in document.paragraphs][3:] == [*body, *summary.splitlines()]
+    document = Document(BytesIO(report_docx(review, summary, source_name="Проект", analysis_date="2026-10-11")))
+    text = "\n".join(p.text for p in document.paragraphs)
+    for risk in risks:
+        assert risk.explanation in text and risk.recommendation in text
+        assert all(c.quote in text for c in risk.citations)
+    assert text.endswith(summary)
+
+
+@pytest.mark.parametrize(
+    "status,has_findings",
+    [(CheckStatus.COMPLETED, False), (CheckStatus.LIMITED, False), (CheckStatus.NOT_CHECKED, False), (CheckStatus.LIMITED, True)],
+)
+def test_prosecutor_template_preserves_evidence_and_qualifies_empty_results(status, has_findings):
+    risk = finding(RiskKind.INTERNAL)
+    risk.citations[0].location = "п. 2, п. 2 (символы 5–20)"
+    risk.citations.append(Citation(source="project", location="пункт 3", quote="Срок 5 дней."))
+    review = Review(
+        findings=[risk] if has_findings else [],
+        checks=[Check(kind=k, status=status, reason="LAW:123 — не получен текст.") for k in REPORT_ORDER],
+    )
+    before = review.model_dump_json()
+    refs = CompetenceRefs(
+        issuer="Министерство социального развития Ульяновской области", form="приказ", project_title="Об утверждении Порядка"
+    )
+    doc = Document(
+        BytesIO(
+            report_docx(
+                review,
+                "Статус проверок:\nLAW:123 — не получен текст.",
+                source_name="Проект.docx",
+                analysis_date="2026-10-12",
+                competence_refs=refs,
+            )
+        )
+    )
+    text = "\n".join(p.text for p in doc.paragraphs)
+    main, appendix = text.split("Справка об объёме проведённой проверки")
+    for expected in (
+        "УТВЕРЖДАЮ",
+        "ЗАКЛЮЧЕНИЕ",
+        "на проект приказа",
+        "Министерства социального развития",
+        "«Об утверждении Порядка»",
+        "Прокуратурой области изучен проект",
+        "(классный чин)",
+        "(Ф.И.О.)",
+    ):
+        assert expected in main
+    assert "LAW:123" not in main and "LAW:123" in appendix
+    assert "Статус проверок:" not in main and "символы" not in main
+    if has_findings:
+        assert "Так, в проекте (п. 2)" in main and "нуждается в доработке" in main
+        assert all(c.quote in main for c in risk.citations)
+        assert risk.explanation in main and risk.recommendation in main
+    elif status is CheckStatus.COMPLETED:
+        assert "в пределах выполненных проверок замечания к проекту отсутствуют" in main
+    else:
+        assert "Вывод о возможности его принятия не сформирован" in main
+        assert "замечания к проекту отсутствуют" not in main
+    assert review.model_dump_json() == before
+    assert doc.styles["Normal"].font.size.pt == 14
+    assert round(doc.sections[0].left_margin.cm, 1) == 2.5
+
+
+def test_full_title_and_preamble_are_printed_without_repeating_the_cover():
+    title = "Об утверждении Регламента услуги «Освобождение в соответствии с законодательством опекунов»"
+    source = (
+        "Министерство социального развития Ульяновской области\nПРИКАЗ\n"
+        "Об утверждении Регламента услуги «Освобождение\n в соответствии с законодательством опекунов»\n"
+        "В соответствии со статьёй 29 Федерального закона от 24.04.2008 № 48-ФЗ\nприказываю:\n"
+        "1. Утвердить Регламент.\n2. Признать утратившим силу приказ от 01.01.2020 № 1-п."
+    )
+    parsed = ParsedDocument(enriched_text=source, tree=build_document_structure_tree(source), act_basis=extract_act_basis(source))
+    refs = CompetenceRefs(
+        form="приказ",
+        issuer="Министерство социального развития Ульяновской области",
+        project_title="Об утверждении Регламента услуги «Освобождение",
+    )
+    before = refs.model_dump_json()
+    doc = Document(
+        BytesIO(
+            report_docx(
+                Review(findings=[], checks=[]),
+                "Проверки не завершены.",
+                source_name="Проект.docx",
+                analysis_date="2026-10-12",
+                competence_refs=refs,
+                parsed_document=parsed,
+            )
+        )
+    )
+    paragraphs = [p.text for p in doc.paragraphs]
+    assert f"«{title}»" in paragraphs
+    basis = next(p for p in paragraphs if p.startswith("В качестве основания"))
+    assert "со статьёй 29" in basis and "Министерство" not in basis and "ПРИКАЗ" not in basis
+    assert "Проектом признаются утратившими силу (отменяются):" in paragraphs
+    assert any("01.01.2020" in p and "1-п" in p for p in paragraphs)
+    assert refs.model_dump_json() == before
 
 
 async def test_deduplication_preserves_distinct_places_sources_and_citations(events):

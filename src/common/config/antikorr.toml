@@ -265,12 +265,10 @@ redundant_repeal_basis = "Требование определённости пе
 
 [default.agents.report.docx]
 vertical_margin_cm = 2
-left_margin_cm = 3
-right_margin_cm = 1.5
+left_margin_cm = 2.5
+right_margin_cm = 2
 font_name = "Times New Roman"
-font_size_pt = 12
-heading = "Заключение по результатам правовой экспертизы"
-analysis_date = "Дата экспертизы: {analysis_date}"
+font_size_pt = 14
 
 [default.agents.competence.sources.kind_labels]
 "federal_law" = "Федеральный закон"

@@ -110,6 +110,8 @@ async def astream_events(app, initial_state: PipelineState) -> AsyncGenerator[Me
     "MCP review stream; a failed review never emits a successful completion."
     report = None
     note = None
+    competence_refs = None
+    parsed_document = None
     with trusted_currentness_scope():
         async for _namespace, mode, payload in app.astream(initial_state, stream_mode=["custom", "updates"], subgraphs=True):
             if not isinstance(payload, dict):
@@ -121,6 +123,10 @@ async def astream_events(app, initial_state: PipelineState) -> AsyncGenerator[Me
                     for event in delta.get("events") or []:
                         yield event
                 else:
+                    if delta.get("competence_refs") is not None:
+                        competence_refs = delta["competence_refs"]
+                    if delta.get("parsed_document") is not None:
+                        parsed_document = delta["parsed_document"]
                     if delta.get("review_result"):
                         report = delta["review_result"]
                     if delta.get("review_summary"):
@@ -131,5 +137,5 @@ async def astream_events(app, initial_state: PipelineState) -> AsyncGenerator[Me
     message = initial_state.get("output_message")
     if isinstance(message, Message):
         yield message
-    yield {"review": report, "summary": note}
+    yield {"review": report, "summary": note, "competence_refs": competence_refs, "parsed_document": parsed_document}
     yield MessageFragment(fragment_id=FRAGMENT_REVIEW_SUMMARY, fragment_type="response", status="success", content=note)
