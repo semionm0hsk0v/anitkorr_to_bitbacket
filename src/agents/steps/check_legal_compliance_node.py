@@ -9,7 +9,7 @@ from src.agents.steps_tools.compliance.deduplication import merge_duplicate_find
 from src.agents.steps_tools.compliance.verdict import assemble_compliance_review, build_source_blocks, check_source_blocks
 from src.agents.steps_tools.review.progress import stage_summary, ui_outcome
 from src.agents.steps_tools.review.settle import not_checked, worse
-from src.agents.utils.streaming import FRAGMENT_COMPLIANCE_REVIEW, emit_ui_event
+from src.agents.utils.streaming import FRAGMENT_COMPLIANCE_REVIEW, emit_ui_event, progress_text
 from src.common.config.config import settings
 from src.common.utils.concurrency import gather_results
 from src.common.utils.logger import get_logger
@@ -38,6 +38,13 @@ async def check_legal_compliance_node(state: LegalReviewState) -> ComplianceBran
         )
         review = Review(findings=[], checks=not_checked(kinds, reason))
     else:
+        emit_ui_event(
+            state,
+            "check_legal_compliance",
+            FRAGMENT_COMPLIANCE_REVIEW,
+            status="in_progress",
+            content=progress_text("compliance"),
+        )
         context_sources = found.context.texts()
         citation_sources = found.sources.texts()
         related_source_text = "\n\n".join(f"source_id: {source_id}\n{text}" for source_id, text in context_sources.items())
@@ -110,7 +117,7 @@ async def check_legal_compliance_node(state: LegalReviewState) -> ComplianceBran
         "check_legal_compliance",
         FRAGMENT_COMPLIANCE_REVIEW,
         status="success",
-        content=stage_summary(review),
+        content=stage_summary(review, sources_unavailable=found is not None and not source_blocks),
         outcome=ui_outcome(review),
     )
     return {"legal_review": review}

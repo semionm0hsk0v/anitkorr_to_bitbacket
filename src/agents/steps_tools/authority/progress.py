@@ -33,7 +33,9 @@ async def finish_authority_review(
         "check_authority",
         FRAGMENT_CHECK_AUTHORITY,
         status="success",
-        content=stage_summary(review, early_stop=early_stop),
+        content=stage_summary(
+            review, early_stop=early_stop, sources_unavailable=competence_refs is not None and not sources_by_id
+        ),
         outcome=ui_outcome(review),
     )
     return {

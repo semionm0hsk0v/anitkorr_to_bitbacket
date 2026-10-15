@@ -345,7 +345,7 @@ async def test_node_failure_or_cancellation_does_not_emit_success(monkeypatch, c
     with pytest.raises(asyncio.CancelledError if cancel else ValueError):
         await task
     assert stopped.is_set()
-    assert not events
+    assert events and all(event["status"] == "in_progress" for event in events)
 
 
 async def test_joint_preparation_failure_does_not_start_generation(monkeypatch):

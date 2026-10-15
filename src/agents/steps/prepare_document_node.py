@@ -39,10 +39,6 @@ async def prepare_document_node(state) -> dict:
         types=npa_type.matched_types,
         basis_refs=basis_refs,
     )
-    done = (
-        progress_text("parse_done_basis").format(basis=", ".join(basis_refs))
-        if basis_refs
-        else progress_text("parse_done_no_basis")
-    )
+    done = progress_text("parse_done_basis" if basis_refs else "parse_done_no_basis")
     emit_ui_event(state, STEP_NAME, FRAGMENT_ID, status="success", content=done, outcome=("clear" if basis_refs else "warn"))
     return {"parsed_document": parsed, "npa_type": npa_type}

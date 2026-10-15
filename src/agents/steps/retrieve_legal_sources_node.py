@@ -16,6 +16,7 @@ from src.agents.steps_tools.compliance.plan import (
 )
 from src.agents.steps_tools.compliance.search import search_discovery, search_named_acts, unique_norms
 from src.agents.steps_tools.compliance.sources import read_legal_sources, summarize_readings
+from src.agents.utils.streaming import FRAGMENT_COMPLIANCE_REVIEW, emit_ui_event, progress_text
 from src.common.config.config import settings
 from src.common.utils.logger import get_logger
 
@@ -24,6 +25,9 @@ log = get_logger(__name__)
 
 async def retrieve_legal_sources_node(state) -> dict:
     """Найти кандидатов в К+, отобрать применимые акты и прочитать их тексты."""
+    emit_ui_event(
+        state, "retrieve_legal_sources", FRAGMENT_COMPLIANCE_REVIEW, status="in_progress", content=progress_text("retrieve")
+    )
     document_text = state["document_text"]
     parsed_document = state.get("parsed_document")
     analysis_date = state.get("analysis_date")

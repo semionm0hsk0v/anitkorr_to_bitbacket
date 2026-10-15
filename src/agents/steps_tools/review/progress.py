@@ -1,23 +1,21 @@
-from collections.abc import Mapping
 from typing import Literal
 
-from src.agents.enums.common.review import CheckStatus, RiskKind
+from src.agents.enums.common.review import CheckStatus
 from src.agents.schemas.common.review import Review
 from src.agents.utils.streaming import progress_text
-from src.common.config.config import settings
 
 
-def stage_summary(review: Review, *, early_stop: bool = False, labels: Mapping[RiskKind, str] | None = None) -> str:
-    """Progress line of one stage: statuses only; findings are shown by the report."""
-    names = {**settings["agents.report.risk_labels"], **(labels or {})}
-    lines = [
-        progress_text(f"review_check_{check.status.value}").format(
-            label=names[check.kind], reason=check.reason, n=sum(1 for f in review.findings if f.kind is check.kind)
-        )
-        for check in review.checks
-    ]
+def stage_summary(review: Review, *, early_stop: bool = False, sources_unavailable: bool = False) -> str:
+    """Bounded user-facing progress; diagnostic reasons stay in the review."""
     if early_stop:
-        lines.append(progress_text("review_early_stop"))
+        return progress_text("review_early_stop")
+    lines = []
+    for check in review.checks:
+        key = f"review_check_{check.status.value}"
+        if check.status is CheckStatus.NOT_CHECKED and sources_unavailable:
+            key = "review_check_sources_unavailable"
+        line = progress_text(key).format(label=progress_text(f"label_{check.kind.value}"))
+        lines.append(line)
     return "\n\n".join(lines)
 
 

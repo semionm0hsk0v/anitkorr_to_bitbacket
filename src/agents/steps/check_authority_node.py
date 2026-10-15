@@ -22,7 +22,7 @@ from src.agents.steps_tools.authority.verdict import (
 from src.agents.steps_tools.review.failures import failure_reason
 from src.agents.steps_tools.sources.source_reading import legal_sources_from_readings
 from src.agents.steps_tools.sources.transport_barrier import is_external_transport_failure
-from src.agents.utils.streaming import FRAGMENT_CHECK_AUTHORITY, emit_ui_event
+from src.agents.utils.streaming import FRAGMENT_CHECK_AUTHORITY, emit_ui_event, progress_text
 from src.common.config.config import settings
 from src.common.utils.logger import get_logger
 
@@ -31,7 +31,9 @@ log = get_logger(__name__)
 
 async def check_authority_node(state: PipelineState) -> dict:  # noqa: PLR0915 - explicit calls and failure boundaries
     """Проверить полномочия по прочитанным нормам и сохранить материалы для следующих шагов."""
-    emit_ui_event(state, "check_authority", FRAGMENT_CHECK_AUTHORITY, status="in_progress", content="Проверка компетенции органа")
+    emit_ui_event(
+        state, "check_authority", FRAGMENT_CHECK_AUTHORITY, status="in_progress", content=progress_text("review_competence")
+    )
 
     document_text = state["document_text"]
     sources_by_id = {source.id: source for source in state.get("legal_sources", [])}

@@ -8,7 +8,6 @@ from src.agents.steps_tools.sources.card_search import consultant_capabilities
 from src.agents.steps_tools.sources.region_banks import region_from_text
 from src.agents.steps_tools.sources.transport_barrier import is_external_transport_failure
 from src.agents.utils.streaming import FRAGMENT_CHECK_INCOMPLETE_REPEAL, emit_ui_event, progress_text
-from src.common.config.config import settings
 from src.common.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -71,7 +70,7 @@ async def check_incomplete_repeal_node(state) -> dict:
         "check_incomplete_repeal",
         FRAGMENT_CHECK_INCOMPLETE_REPEAL,
         status="success",
-        content=stage_summary(review, labels={RiskKind.REPEAL: settings["agents.report.detector_label"]}),
+        content=stage_summary(review),
         outcome=ui_outcome(review),
     )
     return {"repeal_review": review}
